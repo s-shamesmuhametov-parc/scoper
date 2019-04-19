@@ -109,6 +109,7 @@ var Scoper = ( function()
         const bracketStack = [];
         let offset = text.length;
         let bracket = '';
+        let delimiters = [];
         for( let i = index; i < text.length; i++ )
         {
             let char = text.charAt( i );
@@ -141,7 +142,34 @@ var Scoper = ( function()
                 bracketStack.push( char );
             }
         }
-        return new SearchResult( bracket, offset );
+
+        delimiters.push(offset)
+
+        return new SearchResult( bracket, offset, delimiters );
+    }
+
+    function trimStartPos(text, start, end) {
+        let pos = start;
+        for (let index = start; index < end; index++) {
+            const element = text.charAt(index);
+            if (!/\s/.test(element)) {
+                pos = index;
+                break;
+            }
+        }
+        return pos;
+    }
+
+    function trimEndPos(text, start, end) {
+        let pos = end;
+        for (let index = end; index > start; index--) {
+            const element = text.charAt(index);
+            if (!/\s/.test(element)) {
+                pos = index + 1;
+                break;
+            }
+        }
+        return pos;
     }
 
     Scoper.prototype.update = function()
@@ -165,6 +193,8 @@ var Scoper = ( function()
         {
             const backwardResult = findBackward( text, offset - 1 );
             const forwardResult = findForward( text, offset );
+            let endDecorations = [];
+            let rangeDecorations = [];
 
             if( !util.scoperUtil.isMatch( backwardResult.bracket, forwardResult.bracket ) )
             {
@@ -176,25 +206,33 @@ var Scoper = ( function()
             let end = forwardResult.offset;
             let delimiters = backwardResult.delimiters.concat(forwardResult.delimiters);
 
-            const start_decoration = new vscode.Range( editor.document.positionAt( start - 1 ), editor.document.positionAt( start ) );
             if (delimiters.length != 0) {
-                const range_decoration = new vscode.Range( editor.document.positionAt( start ), editor.document.positionAt( end ) );
-                var rangeDecorations = [];
-                delimiters.forEach(element => {
+                let last_start = start;
+                delimiters.sort(function(a, b) {
+                    return a - b;
+                }).forEach(element => {
+                    let chunk_start = trimStartPos(text,last_start,element-1);
+                    let chunk_end = trimEndPos(text,last_start,element-1);
+                    let range_decoration = new vscode.Range(
+                        editor.document.positionAt(chunk_start),
+                        editor.document.positionAt(chunk_end)
+                    );
                     rangeDecorations.push( range_decoration );
+                    last_start = element + 1;
+
+                    let delimiter_range = new vscode.Range( editor.document.positionAt( element ), editor.document.positionAt( element + 1 ) );
+                    endDecorations.push( delimiter_range );
                 });
-                editor.setDecorations( scoperRangeDecorationType, rangeDecorations );
             }else{
                 const range_decoration = new vscode.Range( editor.document.positionAt( start ), editor.document.positionAt( end ) );
-                var rangeDecorations = [];
                 rangeDecorations.push( range_decoration );
-                editor.setDecorations( scoperRangeDecorationType, rangeDecorations );
             }
             const end_decoration = new vscode.Range( editor.document.positionAt( end ), editor.document.positionAt( end + 1 ) );
+            const start_decoration = new vscode.Range( editor.document.positionAt( start - 1 ), editor.document.positionAt( start ) );
 
-            var endDecorations = [];
             endDecorations.push( start_decoration );
             endDecorations.push( end_decoration );
+            editor.setDecorations( scoperRangeDecorationType, rangeDecorations );
             editor.setDecorations( scoperEndDecorationType, endDecorations );
         }
         catch( error )
