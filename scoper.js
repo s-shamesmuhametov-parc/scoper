@@ -53,10 +53,11 @@ var Scoper = ( function()
 
     class SearchResult
     {
-        constructor( bracket, offset )
+        constructor( bracket, offset, delimiters )
         {
             this.bracket = bracket;
             this.offset = offset;
+            this.delimiters = delimiters;
         }
     }
 
@@ -65,6 +66,7 @@ var Scoper = ( function()
         const bracketStack = [];
         let offset = 0;
         let bracket = '';
+        let delimiters = [];
 
         for( let i = index; i >= 0; i-- )
         {
@@ -86,13 +88,20 @@ var Scoper = ( function()
                     }
                 }
             }
+            else if( char === ',' )
+            {
+                if( bracketStack.length === 0 )
+                {
+                    delimiters.push(i)
+                }
+            }
             else if( util.scoperUtil.isCloseBracket( char ) )
             {
                 bracketStack.push( char );
             }
         }
 
-        return new SearchResult( bracket, offset );
+        return new SearchResult( bracket, offset, delimiters );
     }
 
     function findForward( text, index )
@@ -118,6 +127,13 @@ var Scoper = ( function()
                     {
                         throw 'Unmatched bracket pair';
                     }
+                }
+            }
+            else if( char === ',' )
+            {
+                if( bracketStack.length === 0 )
+                {
+                    delimiters.push(i)
                 }
             }
             else if( util.scoperUtil.isOpenBracket( char ) )
@@ -158,13 +174,24 @@ var Scoper = ( function()
 
             let start = backwardResult.offset < text.length ? backwardResult.offset + 1 : backwardResult.offset;
             let end = forwardResult.offset;
+            let delimiters = backwardResult.delimiters.concat(forwardResult.delimiters);
 
             const start_decoration = new vscode.Range( editor.document.positionAt( start - 1 ), editor.document.positionAt( start ) );
-            const range_decoration = new vscode.Range( editor.document.positionAt( start ), editor.document.positionAt( end ) );
+            if (delimiters.length != 0) {
+                const range_decoration = new vscode.Range( editor.document.positionAt( start ), editor.document.positionAt( end ) );
+                var rangeDecorations = [];
+                delimiters.forEach(element => {
+                    rangeDecorations.push( range_decoration );
+                });
+                editor.setDecorations( scoperRangeDecorationType, rangeDecorations );
+            }else{
+                const range_decoration = new vscode.Range( editor.document.positionAt( start ), editor.document.positionAt( end ) );
+                var rangeDecorations = [];
+                rangeDecorations.push( range_decoration );
+                editor.setDecorations( scoperRangeDecorationType, rangeDecorations );
+            }
             const end_decoration = new vscode.Range( editor.document.positionAt( end ), editor.document.positionAt( end + 1 ) );
-            var rangeDecorations = [];
-            rangeDecorations.push( range_decoration );
-            editor.setDecorations( scoperRangeDecorationType, rangeDecorations );
+
             var endDecorations = [];
             endDecorations.push( start_decoration );
             endDecorations.push( end_decoration );
